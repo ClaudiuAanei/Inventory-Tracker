@@ -9,11 +9,13 @@ class User(db.Model):
     email = db.Column(db.String(255), unique=True, index=True, nullable=False)
     account = db.Column(db.String(255), unique=True, index=True, nullable=False)
     name = db.Column(db.String(120), nullable=False)
+    role = db.Column(db.String(20), nullable=False, default="staff")
     password_hash = db.Column(db.String(255), nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     email_verified = db.Column(db.Boolean, default=False, nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now(), nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.now(), onupdate=datetime.now(), nullable=False)
+
 
     def set_password(self, raw_password: str):
         self.password_hash = generate_password_hash(raw_password)

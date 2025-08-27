@@ -24,9 +24,9 @@ def create_app():
     # Token Lifetime
     app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(minutes=20)
     app.config["JWT_REFRESH_TOKEN_EXPIRES"] = timedelta(days=14)
-    app.config["JWT_TOKEN_LOCATION"] = ["cookies"]
+    app.config["JWT_TOKEN_LOCATION"] = ["cookies", "headers"]
     app.config["JWT_COOKIE_SECURE"] = False  # True în producție (doar HTTPS)
-    app.config["JWT_COOKIE_CSRF_PROTECT"] = True  # pentru protecție CSRF
+    app.config["JWT_COOKIE_CSRF_PROTECT"] = False  # pentru protecție CSRF
     app.config["JWT_ACCESS_COOKIE_NAME"] = "access_token"
     app.config["JWT_REFRESH_COOKIE_NAME"] = "refresh_token"
 
@@ -35,13 +35,23 @@ def create_app():
     migrate.init_app(app, db)
     jwt.init_app(app)
 
+    from .models.token_blocklist import TokenBlocklist
+
+    @jwt.token_in_blocklist_loader
+    def check_if_token_revoked(jwt_header, jwt_payload: dict) -> bool:
+        jti = jwt_payload.get("jti")
+        return db.session.query(TokenBlocklist.id).filter_by(jti=jti).first() is not None
+
+    from .utils.errors import register_jwt_errors
+    register_jwt_errors(jwt)
+
     # Blueprints
     from .routes import register_blueprints
     register_blueprints(app)
 
     # TEST
-    # @app.get("/")
-    # def home():
-    #     return jsonify(name="Inventory Tracker App", status="Ready")
+    @app.get("/")
+    def home():
+        return jsonify(name="Inventory Tracker App", status="Ready")
 
     return app
