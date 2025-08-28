@@ -6,6 +6,7 @@ from flask_jwt_extended import (
 )
 from .. import db
 from ..models import User, TokenBlocklist
+from ..utils.roles import require_role
 
 bp = Blueprint("auth", __name__)
 
@@ -16,6 +17,7 @@ def register():
     name = data.get("name") or ""
     email = data.get("email") or ""
     password = data.get("password") or ""
+    role = data.get("role") or ""
 
     if not email or not name or not account or not password:
         return jsonify({"error": "email, name, password, account_name required"}), 400
@@ -23,7 +25,7 @@ def register():
     if User.query.filter_by(email=email).first():
         return jsonify({"error": "An account already was registered with this email"}), 409
 
-    user = User(email= email, account=account ,name=name)
+    user = User(email= email, account= account ,name= name, role= role if role else 'staff')
     user.set_password(raw_password= password)
     db.session.add(user)
     db.session.commit()
@@ -42,7 +44,7 @@ def login():
         return jsonify({"error": "Invalid account or password"}), 401
 
     identity = str(user.id)
-    claims = {"email": user.email, "name": user.name, "account": user.role}
+    claims = {"email": user.email, "name": user.name, "role": user.role}
     access_token = create_access_token(identity=identity, additional_claims=claims)
     refresh_token = create_refresh_token(identity= identity, additional_claims=claims)
 
@@ -61,6 +63,7 @@ def refresh():
 
     user = User.query.get(int(uid))
     claims = {"email": user.email, "name": user.name, "role": user.role}
+    print(user.role)
 
     new_access = create_access_token(identity=uid, additional_claims=claims)
     new_refresh = create_refresh_token(identity=uid, additional_claims=claims)
@@ -100,5 +103,8 @@ def logout():
 def me():
     identity = get_jwt_identity()
     claims = get_jwt()
-    return jsonify({"user": identity,
-                    "account": claims.get('account')})
+    return jsonify({
+        "user": identity,
+        "name": claims.get("name"),
+        "role": claims.get("role")
+    })
