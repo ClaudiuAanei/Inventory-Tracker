@@ -1,6 +1,5 @@
 from datetime import datetime
-from email.policy import default
-
+from sqlalchemy import ForeignKey, UniqueConstraint, Index
 from .. import db
 
 class Product(db.Model):
@@ -13,3 +12,14 @@ class Product(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now(), nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.now(), onupdate=datetime.now(), nullable=False)
 
+    warehouse_id = db.Column(db.Integer, ForeignKey("warehouse.id", ondelete="RESTRICT"),
+                             nullable=False, index=True)
+
+    # Many-to-one relationship products -> WearHouse
+    warehouse = db.relationship("WareHouse", back_populates="products", passive_deletes=True,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("warehouse_id", "name", name="uq_products_wh_name"),  # opțional
+        Index("ix_products_wh_name", "warehouse_id", "name"),
+    )

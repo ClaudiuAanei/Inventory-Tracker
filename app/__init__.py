@@ -3,12 +3,24 @@ import dotenv
 from datetime import timedelta
 from flask import Flask, jsonify
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import MetaData
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+from sqlite3 import Connection as SQLite3Connection
 
 dotenv.load_dotenv()
 
-db = SQLAlchemy()
+naming_convention = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(column_0_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s",
+}
+
+db = SQLAlchemy(metadata=MetaData(naming_convention=naming_convention))
 migrate = Migrate()
 jwt = JWTManager()
 
@@ -48,6 +60,14 @@ def create_app():
     # Blueprints
     from .routes import register_blueprints
     register_blueprints(app)
+
+    @event.listens_for(Engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        # activează FK enforcement doar pentru SQLite
+        if isinstance(dbapi_connection, SQLite3Connection):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON;")
+            cursor.close()
 
     # TEST
     @app.get("/")
