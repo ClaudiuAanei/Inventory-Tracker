@@ -17,6 +17,13 @@ class User(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.now(), onupdate=datetime.now(), nullable=False)
 
 
+    # Relationships
+    stock_movements = db.relationship("StockMovement", back_populates="actor_user")
+    created_transfers = db.relationship("Transfer", back_populates="created_by_user", foreign_keys="Transfer.created_by_user_id")
+    source_confirmed_transfers = db.relationship("Transfer", back_populates="confirmed_by_source", foreign_keys="Transfer.confirmed_by_source_user_id")
+    dest_confirmed_transfers = db.relationship("Transfer", back_populates="confirmed_by_dest", foreign_keys="Transfer.confirmed_by_dest_user_id")
+
+
     def set_password(self, raw_password: str):
         self.password_hash = generate_password_hash(raw_password)
 

@@ -1,5 +1,8 @@
 from flask import jsonify
+from sqlalchemy.exc import IntegrityError
 from flask_jwt_extended import JWTManager
+from .. import db
+
 
 def register_jwt_errors(jwt: JWTManager):
     @jwt.unauthorized_loader

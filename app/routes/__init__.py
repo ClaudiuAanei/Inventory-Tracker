@@ -18,5 +18,11 @@ def register_blueprints(app):
     from .warehouses import bp as warehouses
     app.register_blueprint(warehouses)
 
+    from .stocks import bp as stocks
+    app.register_blueprint(stocks)
+
+    from .stock_movement import bp as stock_movement
+    app.register_blueprint(stock_movement)
+
 
     return app

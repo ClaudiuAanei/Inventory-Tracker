@@ -24,16 +24,14 @@ def create_warehouse():
         return jsonify(error="validation_error", fields=errors), 422
 
     wh = WareHouse(name=name, location=location)
+
+    db.session.add(wh)
     try:
-        db.session.add(wh)
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
-        return jsonify({"status": False,
-                        "msg": "WareHouse with this name is already exists in the company"}), 409
-    except Exception:
-        db.session.rollback()
-        return jsonify(error="server_error"), 500
+        return jsonify({"status": True,
+                    "msg": "WareHouse with this name already exists",})
 
     response = jsonify({"status": True,
                     "msg": "WareHouse created.",
@@ -104,11 +102,7 @@ def update_warehouse(wh_id):
     if errors:
         return jsonify({"status": False, "msg": errors})
 
-    try:
-        db.session.commit()
-    except IntegrityError:
-        db.session.rollback()
-        return jsonify({"status": False, "msg":"This Warehouse is already exists."}), 409
+    db.session.commit()
 
     return jsonify(status=True, message="Warehouse updated.", data={
         "id": wh.id, "name": wh.name, "location": wh.location
@@ -120,12 +114,12 @@ def update_warehouse(wh_id):
 def delete_warehouse(wh_id):
     ware_house = WareHouse.query.filter_by(id=wh_id).first()
     if not ware_house:
-        return jsonify({"status": False,"error": "This WareHouse doesn't exists."}), 409
+        return jsonify({"status": False,"error": "WareHouse doesn't exists."}), 409
     try:
         db.session.delete(ware_house)
         db.session.commit()
     except IntegrityError:
         db.session.rollback()
-        return jsonify({"status": False, "msg": "WareHouse still has products in."}), 409
+        return jsonify({"status": False, "msg": "WareHouse still has products in it."}), 409
 
     return jsonify({"status": True, "msg":"WareHouse was successfuly removed."}), 200

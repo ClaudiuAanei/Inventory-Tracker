@@ -9,7 +9,6 @@ from flask_jwt_extended import JWTManager
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 from sqlite3 import Connection as SQLite3Connection
-
 dotenv.load_dotenv()
 
 naming_convention = {
@@ -68,6 +67,7 @@ def create_app():
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON;")
             cursor.close()
+
 
     # TEST
     @app.get("/")

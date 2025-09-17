@@ -1,9 +1,9 @@
 from flask import Blueprint, jsonify, request
-
-from ..models import WareHouse
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
+from ..models import Stock, Product
 from ..utils.roles import require_role
 from flask_jwt_extended import jwt_required
-from ..models.product import Product
 from .. import db
 
 bp = Blueprint("products", __name__)
@@ -23,7 +23,6 @@ def create_product():
 
     name = data.get('name') or ""
     price = data.get('price') or ""
-    warehouse_id = data.get("warehouse_id") or 1
     category = data.get('category') or "no category"
 
     if not name or not price or category not in categories:
@@ -38,26 +37,12 @@ def create_product():
             "msg": "The price must be a number and/or higher than 0"
         }), 401
 
-    warehouse = WareHouse.query.filter_by(id=warehouse_id).first()
-    if not warehouse:
-        return jsonify({"status": False,
-            "msg": "WareHouse doesn't exists."
-            }), 404
-
-    already_exist = Product.query.filter_by(name=name, warehouse_id=warehouse_id).first()
-    if already_exist:
-        return jsonify({
-            "status": False,
-            "msg" : "Product already exist in inventory."
-        }), 409
-
-
     # Create product and add to database
     new_product = Product(name= name,
                           sku= sku,
                           price= price,
-                          category= category if category in categories else "No Category",
-                          warehouse_id= warehouse_id)
+                          category= category if category in categories else "No Category")
+
     db.session.add(new_product)
     db.session.commit()
 
@@ -66,11 +51,11 @@ def create_product():
         "msg": "New product was successfuly created.",
         "data": {"id": new_product.id,
                  "name": new_product.name,
+                 "sku": new_product.sku,
                  "price": new_product.price,
-                 "category": new_product.category,
-                 "warehouse_id": new_product.warehouse_id},
+                 "category": new_product.category
+                 },
     }), 201
-
 
 @bp.get("/products")
 @jwt_required()
@@ -78,7 +63,6 @@ def create_product():
 def list_products():
     prod = request.args.get("prod")
     category = request.args.get("category")
-    warehouse_id = request.args.get("warehouse_id")
     page = max(1, request.args.get("page", default= 1, type= int))
     page_size = min(100, request.args.get("page_size", default=20, type= int))
 
@@ -88,8 +72,6 @@ def list_products():
         query = query.filter(Product.name.ilike(f"%{prod}%"))
     if category:
         query = query.filter(Product.category == category)
-    if warehouse_id:
-        query = query.filter(Product.warehouse_id == warehouse_id)
 
     items = query.paginate(page= page, per_page= page_size, error_out=False)
 
@@ -107,8 +89,6 @@ def list_products():
                 "name": p.name,
                 "price": float(p.price),
                 "category": p.category,
-                "warehouse_id": p.warehouse_id,
-                "warehouse_name": p.warehouse.name
             }
             for p in items.items
         ]
@@ -117,12 +97,33 @@ def list_products():
 @bp.get("/products/<int:pid>")
 @jwt_required()
 def details_product(pid):
-    prod = Product.query.filter_by(id=pid).first()
-
+    prod = Product.query.get(pid)
+    warehouse_id = request.args.get("warehouse_id", type= int, default= 1)
     if not prod:
-        return jsonify({"msg" : "No product with that id"}), 401
-    return jsonify({"id": prod.id, "sku": prod.sku, "name": prod.name,
-                "price": float(prod.price), "category": prod.category}), 200
+        return jsonify({"msg": "No product with that id"}), 404
+
+    total_qty = (
+        db.session.query(func.coalesce(func.sum(Stock.quantity), 0))
+        .filter(Stock.product_id == pid)
+        .scalar()
+    )
+
+    qty_in_wh = (
+        db.session.query(func.coalesce(func.sum(Stock.quantity), 0))
+        .filter(Stock.product_id == pid, Stock.warehouse_id == warehouse_id)
+        .scalar()
+    )
+
+    return jsonify({
+        "id": prod.id,
+        "sku": prod.sku,
+        "name": prod.name,
+        "price": float(prod.price),
+        "category": prod.category,
+        "total_qty": total_qty,
+        "qty_in_wh": qty_in_wh,
+        "warehouse_id": warehouse_id
+    }), 200
 
 @bp.patch("/products/<int:pid>")
 @jwt_required()
@@ -130,17 +131,6 @@ def details_product(pid):
 def update_product(pid):
     product = Product.query.get_or_404(pid)
     data = request.get_json()
-
-    if "warehouse_id" in data:
-        new_wh_id = data.get("warehouse_id")
-        if new_wh_id is None:
-            return jsonify({"status": False, "msg": "Warehouse id is required."}), 422
-
-        if new_wh_id != product.warehouse_id:
-            destination = WareHouse.query.get(new_wh_id)
-            if not destination:
-                return jsonify({"status": False, "msg": "Warehouse not found."}), 404
-            product.warehouse_id = new_wh_id
 
     if "name" in data:
         product.name = data["name"] or ""
@@ -151,17 +141,18 @@ def update_product(pid):
         if not product.price:
             return jsonify({"status": False, "msg": "Price is required"})
     if "category" in data:
-        product.category = data["category"] or ""
-        if not product.category:
-            return jsonify({"status": False, "msg": "Category required"})
+        product.category = data["category"] or "no category"
 
     db.session.commit()
     return jsonify({
         "status": True,
-        "name": product.name,
-        "warehouse_id": product.warehouse_id,
-        "price": float(product.price),
-        "msg":"Product updated"}), 200
+        "msg": "Product updated",
+        "data" :
+            {"name": product.name,
+            "sku": product.sku,
+            "price": float(product.price),
+            }
+        }), 200
 
 @bp.delete("/products/<int:pid>")
 @jwt_required()
@@ -169,6 +160,10 @@ def update_product(pid):
 def delete_product(pid):
     product = Product.query.get_or_404(pid)
     db.session.delete(product)
-    db.session.commit()
+    try:
+        db.session.commit()
+    except IntegrityError:
+        db.session.rollback()
+        return jsonify({"status":False, "msg":"Product have stocks in one ore more Warehouses"}), 409
 
     return jsonify({"status":True, "msg":"Product was succesfully deleted."}), 200

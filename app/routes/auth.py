@@ -78,7 +78,6 @@ def refresh():
     db.session.commit()
     return response, 200
 
-
 @bp.post("/logout")
 @jwt_required(verify_type=False)  # acceptă access sau refresh
 def logout():

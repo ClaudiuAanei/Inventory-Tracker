@@ -3,3 +3,7 @@ from .users import User
 from .token_blocklist import TokenBlocklist
 from .product import Product
 from .warehouses import WareHouse
+from .stocks import Stock
+from .stock_movements import StockMovement
+from .transfers import Transfer
+from .transfer_items import TransferItem
